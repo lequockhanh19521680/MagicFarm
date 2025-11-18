@@ -86,6 +86,33 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "Click",
+                    "type": "Button",
+                    "id": "ea418766-f369-423e-a888-024320a32de4",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Exit",
+                    "type": "Button",
+                    "id": "a977b4d7-24f6-4419-8ca6-dd0246dc9645",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "PointerPosition",
+                    "type": "Value",
+                    "id": "3246c704-8998-4bd5-af66-2a61519668e3",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
                 }
             ],
             "bindings": [
@@ -471,6 +498,39 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "Crouch",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "2cbff8e0-f0b6-4992-9c58-64c80ad32ffd",
+                    "path": "<Mouse>/leftButton",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Click",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "1e194f6f-911c-4be3-8671-3d4cd86f9fe8",
+                    "path": "<Touchscreen>/primaryTouch/tap",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Click",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "63f6ef16-a936-4587-85b3-36ed20835868",
+                    "path": "<Keyboard>/escape",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Exit",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
@@ -994,12 +1054,12 @@
         },
         {
             "name": "Camera",
-            "id": "83125e5f-22e2-4775-bbbf-c8ca2420e172",
+            "id": "2dca8232-812d-4fc9-b37d-7fb15a4cf7ab",
             "actions": [
                 {
                     "name": "Zoom",
                     "type": "Value",
-                    "id": "f288edc4-3eb8-4070-affa-2813acaa95b9",
+                    "id": "1623ef5e-297c-4b26-bd64-41802bfca005",
                     "expectedControlType": "Vector2",
                     "processors": "",
                     "interactions": "",
@@ -1009,11 +1069,11 @@
             "bindings": [
                 {
                     "name": "",
-                    "id": "2244bf5d-2bde-4426-83b0-3244f1845649",
+                    "id": "f8f45f5d-191f-435e-9ad7-9ae8a8f4e909",
                     "path": "<Mouse>/scroll",
                     "interactions": "",
                     "processors": "",
-                    "groups": ";Keyboard&Mouse",
+                    "groups": "",
                     "action": "Zoom",
                     "isComposite": false,
                     "isPartOfComposite": false
