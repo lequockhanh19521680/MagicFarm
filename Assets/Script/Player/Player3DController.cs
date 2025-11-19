@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using MagicFarm.Core.Input;
 
 namespace MagicFarm.Player
 {
@@ -54,9 +55,8 @@ namespace MagicFarm.Player
         #endregion
 
         #region Private Fields
-
         private CharacterController _controller;
-        private Core.Input.InputSystem_Actions _inputActions;
+        private InputSystem_Actions _inputActions;
         private Vector2 _moveInput;
         private Vector3 _velocity;
         private float _currentSpeed;
@@ -123,10 +123,10 @@ namespace MagicFarm.Player
 
         /// <summary>
         /// Initializes required components.
-        /// </summary>
         private void InitializeComponents()
         {
-            _inputActions = new Core.Input.InputSystem_Actions();
+            _inputActions = new InputSystem_Actions();
+            _controller = GetComponent<CharacterController>();
             _controller = GetComponent<CharacterController>();
 
             if (_controller == null)

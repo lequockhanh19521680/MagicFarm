@@ -77,7 +77,7 @@ namespace MagicFarm.TimeSystem
 
         #region Private Fields
 
-        private Camera _mainCamera;
+        private UnityEngine.Camera _mainCamera;
 
         #endregion
 
@@ -107,7 +107,7 @@ namespace MagicFarm.TimeSystem
         /// </summary>
         private void InitializeComponents()
         {
-            _mainCamera = Camera.main;
+            _mainCamera = UnityEngine.Camera.main;
             
             if (_mainCamera == null)
             {

@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using TouchPhase = UnityEngine.InputSystem.TouchPhase;
 
 namespace MagicFarm.Core.Input
 {
@@ -15,7 +16,7 @@ namespace MagicFarm.Core.Input
 
         [Header("Raycast Configuration")]
         [Tooltip("Camera used for raycasting to determine world positions.")]
-        [SerializeField] private Camera sceneCamera;
+        [SerializeField] private UnityEngine.Camera sceneCamera;
         
         [Tooltip("Layer mask for objects that can be clicked/selected.")]
         [SerializeField] private LayerMask placementLayermask;
@@ -106,7 +107,7 @@ namespace MagicFarm.Core.Input
         {
             if (sceneCamera == null)
             {
-                sceneCamera = Camera.main;
+                sceneCamera = UnityEngine.Camera.main;
                 if (sceneCamera == null)
                 {
                     Debug.LogError($"[{nameof(InputManager)}] No scene camera assigned and no main camera found!");
