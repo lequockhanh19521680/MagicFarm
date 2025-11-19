@@ -1,238 +1,471 @@
 using UnityEngine;
 using System;
 
-[System.Serializable]
-public struct GameTimeData
+namespace MagicFarm.TimeSystem
 {
-    public int currentDay;
-    public int currentHour;
-    public int currentMinute;
-    public Season currentSeason;
-    public int currentYear;
-}
+    #region Data Structures
 
-/// <summary>
-/// Các phân đoạn thời gian trong ngày.
-/// </summary>
-public enum TimeSegment
-{
-    Night,      // 22h - 04h: Đêm khuya
-    Dawn,       // 04h - 06h: Rạng đông (mờ sáng)
-    Morning,    // 06h - 11h: Buổi sáng
-    Noon,       // 11h - 13h: Buổi trưa (đứng bóng)
-    Afternoon,  // 13h - 17h: Buổi chiều
-    Dusk,       // 17h - 19h: Hoàng hôn (chạng vạng)
-    Evening     // 19h - 22h: Buổi tối
-}
-
-public enum Season
-{
-    Spring, Summer, Autumn, Winter
-}
-
-public class GameTimeManager : MonoBehaviour
-{
-    // --- Singleton Pattern ---
-    private static GameTimeManager _instance;
-    public static GameTimeManager Instance
+    /// <summary>
+    /// Data structure for storing game time state.
+    /// </summary>
+    [Serializable]
+    public struct GameTimeData
     {
-        get
-        {
-            if (_instance == null)
-                _instance = FindFirstObjectByType<GameTimeManager>();
-            return _instance;
-        }
+        public int currentDay;
+        public int currentHour;
+        public int currentMinute;
+        public Season currentSeason;
+        public int currentYear;
     }
 
-    [Header("Time Settings")]
-    [Tooltip("Số giây thực tế cho 1 ngày 24h trong game.")]
-    [SerializeField] private float secondsPerFullDay = 1200f;
-    
-    [Tooltip("Giờ bắt đầu ngày mới (thường là sáng sớm).")]
-    [Range(0, 23)]
-    [SerializeField] private int dayStartHour = 6;
-
-    [Header("Seasons & Years")]
-    [SerializeField] private int daysPerSeason = 30;
-
-    // --- Debug State ---
-    [Header("Debug - Current Time State")]
-    [SerializeField][Range(0, 1)] private float _timeOfDay01;
-    [SerializeField] private int _currentMinute;
-    [SerializeField] private int _currentHour;
-    [SerializeField] private int _currentDay = 1;
-    [SerializeField] private Season _currentSeason = Season.Spring;
-    [SerializeField] private int _currentYear = 1;
-    
-    [Tooltip("Thời gian hiện tại (giây) trong ngày.")]
-    [SerializeField] private float _currentTimeInSeconds;
-
-    // --- Logic State ---
-    [Header("Debug - Time Segment")]
-    [SerializeField] private TimeSegment _currentTimeSegment;
-
-    private int _lastHourFired = -1;
-    private int _lastMinuteFired = -1;
-    private bool _isInitialized = false;
-
-    // --- Events ---
-    public event Action OnTimeOfDayChanged;
-    public event Action<int> OnMinuteChanged;
-    public event Action<int> OnHourChanged;
-    public event Action<int> OnDayChanged;
-    public event Action<Season> OnSeasonChanged;
-    public event Action<int> OnYearChanged;
-    
     /// <summary>
-    /// Sự kiện bắn ra khi chuyển vùng thời gian (Sáng -> Trưa, v.v...)
-    /// Payload: (TimeSegment) vùng thời gian mới
+    /// Time segments representing different periods of the day.
     /// </summary>
-    public event Action<TimeSegment> OnTimeSegmentChanged;
+    public enum TimeSegment
+    {
+        Night,      // 22:00 - 04:00: Late night
+        Dawn,       // 04:00 - 06:00: Early morning/Dawn
+        Morning,    // 06:00 - 11:00: Morning
+        Noon,       // 11:00 - 13:00: Midday
+        Afternoon,  // 13:00 - 17:00: Afternoon
+        Dusk,       // 17:00 - 19:00: Evening/Dusk
+        Evening     // 19:00 - 22:00: Night
+    }
 
-    // --- Getters ---
-    public float TimeOfDay01 => _timeOfDay01;
-    public int CurrentMinute => _currentMinute;
-    public int CurrentHour => _currentHour;
-    public int CurrentDay => _currentDay;
-    public Season CurrentSeason => _currentSeason;
-    public int CurrentYear => _currentYear;
-    public TimeSegment CurrentTimeSegment => _currentTimeSegment;
+    /// <summary>
+    /// Seasons of the year.
+    /// </summary>
+    public enum Season
+    {
+        Spring,
+        Summer,
+        Autumn,
+        Winter
+    }
 
-    // --- Initialization ---
-    private void Awake()
+    #endregion
+
+    /// <summary>
+    /// Manages game time progression including days, seasons, and years.
+    /// Provides events for time-based game systems to subscribe to.
+    /// </summary>
+    public class GameTimeManager : MonoBehaviour
+    {
+        #region Singleton
+
+        private static GameTimeManager _instance;
+
+        /// <summary>
+        /// Gets the singleton instance of the GameTimeManager.
+        /// </summary>
+        public static GameTimeManager Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = FindFirstObjectByType<GameTimeManager>();
+                }
+                return _instance;
+            }
+        }
+
+        #endregion
+
+        #region Serialized Fields
+
+        [Header("Time Configuration")]
+        [Tooltip("Real-time seconds required for a complete 24-hour game day.")]
+        [SerializeField] private float secondsPerFullDay = 1200f;
+        
+        [Tooltip("Hour at which a new day begins (typically early morning).")]
+        [Range(0, 23)]
+        [SerializeField] private int dayStartHour = 6;
+
+        [Header("Calendar Configuration")]
+        [Tooltip("Number of days in each season.")]
+        [SerializeField] private int daysPerSeason = 30;
+
+        [Header("Debug - Current State")]
+        [SerializeField][Range(0, 1)] private float _timeOfDay01;
+        [SerializeField] private int _currentMinute;
+        [SerializeField] private int _currentHour;
+        [SerializeField] private int _currentDay = 1;
+        [SerializeField] private Season _currentSeason = Season.Spring;
+        [SerializeField] private int _currentYear = 1;
+        [SerializeField] private float _currentTimeInSeconds;
+        [SerializeField] private TimeSegment _currentTimeSegment;
+
+        #endregion
+
+        #region Constants
+
+        private const int HOURS_PER_DAY = 24;
+        private const int MINUTES_PER_HOUR = 60;
+        private const int TOTAL_MINUTES_PER_DAY = HOURS_PER_DAY * MINUTES_PER_HOUR;
+
+        #endregion
+
+        #region Private Fields
+
+        private int _lastHourFired = -1;
+        private int _lastMinuteFired = -1;
+        private bool _isInitialized;
+
+        #endregion
+
+        #region Events
+
+        /// <summary>
+        /// Invoked every frame as time progresses.
+        /// </summary>
+        public event Action OnTimeOfDayChanged;
+
+        /// <summary>
+        /// Invoked when the minute value changes.
+        /// </summary>
+        public event Action<int> OnMinuteChanged;
+
+        /// <summary>
+        /// Invoked when the hour value changes.
+        /// </summary>
+        public event Action<int> OnHourChanged;
+
+        /// <summary>
+        /// Invoked when a new day begins.
+        /// </summary>
+        public event Action<int> OnDayChanged;
+
+        /// <summary>
+        /// Invoked when the season changes.
+        /// </summary>
+        public event Action<Season> OnSeasonChanged;
+
+        /// <summary>
+        /// Invoked when a new year begins.
+        /// </summary>
+        public event Action<int> OnYearChanged;
+
+        /// <summary>
+        /// Invoked when the time segment changes (e.g., Morning to Noon).
+        /// </summary>
+        public event Action<TimeSegment> OnTimeSegmentChanged;
+
+        #endregion
+
+        #region Properties
+
+        /// <summary>
+        /// Gets the current time of day as a normalized value (0-1).
+        /// </summary>
+        public float TimeOfDay01 => _timeOfDay01;
+
+        /// <summary>
+        /// Gets the current minute (0-59).
+        /// </summary>
+        public int CurrentMinute => _currentMinute;
+
+        /// <summary>
+        /// Gets the current hour (0-23).
+        /// </summary>
+        public int CurrentHour => _currentHour;
+
+        /// <summary>
+        /// Gets the current day of the season.
+        /// </summary>
+        public int CurrentDay => _currentDay;
+
+        /// <summary>
+        /// Gets the current season.
+        /// </summary>
+        public Season CurrentSeason => _currentSeason;
+
+        /// <summary>
+        /// Gets the current year.
+        /// </summary>
+        public int CurrentYear => _currentYear;
+
+        /// <summary>
+        /// Gets the current time segment.
+        /// </summary>
+        public TimeSegment CurrentTimeSegment => _currentTimeSegment;
+
+        /// <summary>
+        /// Gets the current game time as a formatted string (HH:MM).
+        /// </summary>
+        public string FormattedTime => $"{_currentHour:D2}:{_currentMinute:D2}";
+
+        /// <summary>
+        /// Gets the current game time data as a struct.
+        /// </summary>
+        public GameTimeData GetTimeData()
+        {
+            return new GameTimeData
+            {
+                currentDay = _currentDay,
+                currentHour = _currentHour,
+                currentMinute = _currentMinute,
+                currentSeason = _currentSeason,
+                currentYear = _currentYear
+            };
+        }
+
+        #endregion
+
+        #region Unity Lifecycle
+
+        private void Awake()
+        {
+            InitializeSingleton();
+        }
+
+        private void Start()
+        {
+            InitializeTime();
+        }
+
+        private void Update()
+        {
+            ProgressTime();
+        }
+
+        #endregion
+
+        #region Initialization
+
+        /// <summary>
+        /// Initializes the singleton pattern.
+        /// </summary>
+        private void InitializeSingleton()
         {
             if (_instance != null && _instance != this)
             {
                 Destroy(gameObject);
+                return;
+            }
+
+            _instance = this;
+            transform.SetParent(null);
+            DontDestroyOnLoad(gameObject);
+        }
+
+        /// <summary>
+        /// Initializes the time system to the starting time.
+        /// </summary>
+        private void InitializeTime()
+        {
+            SetTime(dayStartHour, 0);
+            _isInitialized = true;
+            UpdateClock(forceUpdate: true);
+        }
+
+        #endregion
+
+        #region Time Progression
+
+        /// <summary>
+        /// Progresses time based on real-time delta.
+        /// </summary>
+        private void ProgressTime()
+        {
+            _currentTimeInSeconds += Time.deltaTime;
+
+            if (_currentTimeInSeconds >= secondsPerFullDay)
+            {
+                _currentTimeInSeconds -= secondsPerFullDay;
+            }
+
+            UpdateClock(forceUpdate: false);
+        }
+
+        /// <summary>
+        /// Updates the clock and fires appropriate events.
+        /// </summary>
+        private void UpdateClock(bool forceUpdate)
+        {
+            CalculateTimeValues();
+            
+            OnTimeOfDayChanged?.Invoke();
+
+            CheckMinuteChange(forceUpdate);
+            CheckHourChange(forceUpdate);
+        }
+
+        /// <summary>
+        /// Calculates current hour and minute from elapsed time.
+        /// </summary>
+        private void CalculateTimeValues()
+        {
+            _timeOfDay01 = _currentTimeInSeconds / secondsPerFullDay;
+            float totalMinutes = _timeOfDay01 * TOTAL_MINUTES_PER_DAY;
+            
+            _currentHour = Mathf.FloorToInt(totalMinutes / MINUTES_PER_HOUR) % HOURS_PER_DAY;
+            _currentMinute = Mathf.FloorToInt(totalMinutes % MINUTES_PER_HOUR);
+        }
+
+        /// <summary>
+        /// Checks and fires minute change event if needed.
+        /// </summary>
+        private void CheckMinuteChange(bool forceUpdate)
+        {
+            if (_currentMinute != _lastMinuteFired || forceUpdate)
+            {
+                OnMinuteChanged?.Invoke(_currentMinute);
+                _lastMinuteFired = _currentMinute;
+            }
+        }
+
+        /// <summary>
+        /// Checks and fires hour change event if needed.
+        /// </summary>
+        private void CheckHourChange(bool forceUpdate)
+        {
+            if (_currentHour != _lastHourFired || forceUpdate)
+            {
+                OnHourChanged?.Invoke(_currentHour);
+
+                if (_isInitialized && _currentHour == dayStartHour && _lastHourFired != dayStartHour)
+                {
+                    IncrementDay();
+                }
+
+                UpdateTimeSegment();
+                _lastHourFired = _currentHour;
+            }
+        }
+
+        #endregion
+
+        #region Time Segment Management
+
+        /// <summary>
+        /// Updates the current time segment based on the hour.
+        /// </summary>
+        private void UpdateTimeSegment()
+        {
+            TimeSegment newSegment = DetermineTimeSegment(_currentHour);
+
+            if (newSegment != _currentTimeSegment)
+            {
+                _currentTimeSegment = newSegment;
+                OnTimeSegmentChanged?.Invoke(_currentTimeSegment);
+            }
+        }
+
+        /// <summary>
+        /// Determines the time segment for a given hour.
+        /// </summary>
+        private TimeSegment DetermineTimeSegment(int hour)
+        {
+            if (hour >= 4 && hour < 6) return TimeSegment.Dawn;
+            if (hour >= 6 && hour < 11) return TimeSegment.Morning;
+            if (hour >= 11 && hour < 13) return TimeSegment.Noon;
+            if (hour >= 13 && hour < 17) return TimeSegment.Afternoon;
+            if (hour >= 17 && hour < 19) return TimeSegment.Dusk;
+            if (hour >= 19 && hour < 22) return TimeSegment.Evening;
+            return TimeSegment.Night;
+        }
+
+        #endregion
+
+        #region Calendar Management
+
+        /// <summary>
+        /// Increments the day counter and checks for season change.
+        /// </summary>
+        private void IncrementDay()
+        {
+            _currentDay++;
+            OnDayChanged?.Invoke(_currentDay);
+
+            if (_currentDay > daysPerSeason)
+            {
+                _currentDay = 1;
+                IncrementSeason();
+            }
+        }
+
+        /// <summary>
+        /// Increments the season and checks for year change.
+        /// </summary>
+        private void IncrementSeason()
+        {
+            if (_currentSeason == Season.Winter)
+            {
+                _currentSeason = Season.Spring;
+                IncrementYear();
             }
             else
             {
-                _instance = this;
-                
-                transform.SetParent(null); 
-                
-                DontDestroyOnLoad(gameObject);
+                _currentSeason++;
             }
-        }
-
-    private void Start()
-    {
-        SetTime(dayStartHour, 0); 
-        _isInitialized = true;
-        
-        // Tính toán segment ban đầu
-        UpdateClock(true);
-    }
-
-    private void Update()
-    {
-        _currentTimeInSeconds += Time.deltaTime;
-
-        if (_currentTimeInSeconds >= secondsPerFullDay)
-        {
-            _currentTimeInSeconds -= secondsPerFullDay;
-        }
-        
-        UpdateClock(false);
-    }
-
-    // --- Core Logic ---
-    private void UpdateClock(bool forceUpdate)
-    {
-        _timeOfDay01 = _currentTimeInSeconds / secondsPerFullDay;
-        
-        float totalMinutes = _timeOfDay01 * 24 * 60;
-        _currentHour = Mathf.FloorToInt(totalMinutes / 60) % 24;
-        _currentMinute = Mathf.FloorToInt(totalMinutes % 60);
-
-        OnTimeOfDayChanged?.Invoke(); 
-
-        if (_currentMinute != _lastMinuteFired || forceUpdate)
-        {
-            OnMinuteChanged?.Invoke(_currentMinute);
-            _lastMinuteFired = _currentMinute;
-        }
-
-        if (_currentHour != _lastHourFired || forceUpdate)
-        {
-            OnHourChanged?.Invoke(_currentHour);
             
-            // Check Day Change
-            if (_isInitialized && _currentHour == dayStartHour && _lastHourFired != dayStartHour)
-            {
-                IncrementDay();
-            }
-
-            // Check Time Segment Change
-            CheckTimeSegment();
-
-            _lastHourFired = _currentHour;
+            OnSeasonChanged?.Invoke(_currentSeason);
         }
-    }
 
-    /// <summary>
-    /// Xác định vùng thời gian dựa trên giờ hiện tại.
-    /// </summary>
-    private void CheckTimeSegment()
-    {
-        TimeSegment newSegment;
-
-        // Logic phân chia giờ
-        if (_currentHour >= 4 && _currentHour < 6) newSegment = TimeSegment.Dawn;        // 4h-6h
-        else if (_currentHour >= 6 && _currentHour < 11) newSegment = TimeSegment.Morning; // 6h-11h
-        else if (_currentHour >= 11 && _currentHour < 13) newSegment = TimeSegment.Noon;   // 11h-13h
-        else if (_currentHour >= 13 && _currentHour < 17) newSegment = TimeSegment.Afternoon;// 13h-17h
-        else if (_currentHour >= 17 && _currentHour < 19) newSegment = TimeSegment.Dusk;     // 17h-19h
-        else if (_currentHour >= 19 && _currentHour < 22) newSegment = TimeSegment.Evening;  // 19h-22h
-        else newSegment = TimeSegment.Night;                                                 // 22h-4h
-
-        // Nếu thay đổi so với trước đó thì bắn event
-        if (newSegment != _currentTimeSegment)
+        /// <summary>
+        /// Increments the year counter.
+        /// </summary>
+        private void IncrementYear()
         {
-            _currentTimeSegment = newSegment;
-            OnTimeSegmentChanged?.Invoke(_currentTimeSegment);
-            // Debug.Log($"Time Segment Changed: {newSegment}");
+            _currentYear++;
+            OnYearChanged?.Invoke(_currentYear);
         }
-    }
 
-    private void IncrementDay()
-    {
-        _currentDay++;
-        OnDayChanged?.Invoke(_currentDay);
+        #endregion
 
-        if (_currentDay > daysPerSeason)
+        #region Public Methods
+
+        /// <summary>
+        /// Sets the time to a specific hour and minute.
+        /// </summary>
+        /// <param name="hour">Hour to set (0-23).</param>
+        /// <param name="minute">Minute to set (0-59).</param>
+        public void SetTime(int hour, int minute)
         {
-            _currentDay = 1;
-            IncrementSeason();
-        }
-    }
+            hour = Mathf.Clamp(hour, 0, HOURS_PER_DAY - 1);
+            minute = Mathf.Clamp(minute, 0, MINUTES_PER_HOUR - 1);
 
-    private void IncrementSeason()
-    {
-        if (_currentSeason == Season.Winter)
+            float totalMinutes = (hour * MINUTES_PER_HOUR) + minute;
+            _timeOfDay01 = totalMinutes / TOTAL_MINUTES_PER_DAY;
+            _currentTimeInSeconds = _timeOfDay01 * secondsPerFullDay;
+            
+            UpdateClock(forceUpdate: true);
+        }
+
+        /// <summary>
+        /// Sets the current season.
+        /// </summary>
+        public void SetSeason(Season season)
         {
-            _currentSeason = Season.Spring;
-            IncrementYear();
+            _currentSeason = season;
+            OnSeasonChanged?.Invoke(_currentSeason);
         }
-        else
+
+        /// <summary>
+        /// Pauses time progression.
+        /// </summary>
+        public void PauseTime()
         {
-            _currentSeason++;
+            enabled = false;
         }
-        OnSeasonChanged?.Invoke(_currentSeason);
-    }
 
-    private void IncrementYear()
-    {
-        _currentYear++;
-        OnYearChanged?.Invoke(_currentYear);
-    }
+        /// <summary>
+        /// Resumes time progression.
+        /// </summary>
+        public void ResumeTime()
+        {
+            enabled = true;
+        }
 
-    // --- Public Setter ---
-    public void SetTime(int hour, int minute)
-    {
-        float totalMinutes = (hour * 60) + minute;
-        _timeOfDay01 = totalMinutes / (24 * 60);
-        _currentTimeInSeconds = _timeOfDay01 * secondsPerFullDay;
-        UpdateClock(true);
+        /// <summary>
+        /// Gets whether time is currently paused.
+        /// </summary>
+        public bool IsTimePaused()
+        {
+            return !enabled;
+        }
+
+        #endregion
     }
 }

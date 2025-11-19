@@ -1,54 +1,135 @@
 using UnityEngine;
-using System.Collections;
 
-public class FadingObject : MonoBehaviour
+namespace MagicFarm.Camera
 {
-    public float fadeSpeed = 10f;
-    public float targetAlpha = 0.2f; // Độ trong suốt khi bị chắn (0.2 là khá mờ)
-    
-    private Renderer _renderer;
-    private MaterialPropertyBlock _propBlock; // Best Practice: Dùng cái này để tối ưu
-    private float _currentAlpha = 1f;
-    private bool _isObstructing = false;
-
-    void Start()
+    /// <summary>
+    /// Manages alpha fading for objects that obstruct the camera's view.
+    /// Uses MaterialPropertyBlock for optimal performance when modifying object transparency.
+    /// </summary>
+    [RequireComponent(typeof(Renderer))]
+    public class FadingObject : MonoBehaviour
     {
-        _renderer = GetComponent<Renderer>();
-        _propBlock = new MaterialPropertyBlock();
-    }
+        #region Serialized Fields
 
-    void Update()
-    {
-        // Nếu đang chắn thì giảm alpha về target, ngược lại thì tăng về 1
-        float target = _isObstructing ? targetAlpha : 1f;
+        [Header("Fade Settings")]
+        [Tooltip("Speed at which the object fades in and out.")]
+        [SerializeField] private float fadeSpeed = 10f;
         
-        // Sử dụng Mathf.MoveTowards hoặc Lerp để chuyển đổi mượt mà
-        if (Mathf.Abs(_currentAlpha - target) > 0.01f)
+        [Tooltip("Target alpha value when the object is obstructing (0 = fully transparent, 1 = fully opaque).")]
+        [Range(0f, 1f)]
+        [SerializeField] private float targetAlpha = 0.2f;
+
+        #endregion
+
+        #region Constants
+
+        private const float ALPHA_COMPARISON_THRESHOLD = 0.01f;
+        private const float FULLY_OPAQUE = 1f;
+        private const string URP_BASE_COLOR_PROPERTY = "_BaseColor";
+
+        #endregion
+
+        #region Private Fields
+
+        private Renderer _renderer;
+        private MaterialPropertyBlock _propertyBlock;
+        private float _currentAlpha = FULLY_OPAQUE;
+        private bool _isObstructing;
+
+        #endregion
+
+        #region Unity Lifecycle
+
+        private void Start()
         {
-            _currentAlpha = Mathf.MoveTowards(_currentAlpha, target, fadeSpeed * Time.deltaTime);
-            SetAlpha(_currentAlpha);
+            InitializeComponents();
         }
 
-        // Reset trạng thái mỗi frame để Camera phải gọi liên tục
-        _isObstructing = false;
-    }
+        private void Update()
+        {
+            UpdateFadeState();
+        }
 
-    // Hàm này sẽ được gọi từ Camera Script
-    public void SetObstructing()
-    {
-        _isObstructing = true;
-    }
+        #endregion
 
-    private void SetAlpha(float alpha)
-    {
-        // Lấy màu hiện tại
-        _renderer.GetPropertyBlock(_propBlock);
-        Color color = _renderer.sharedMaterial.color; // Lấy màu gốc
-        color.a = alpha;
-        
-        // Update màu mới vào Property Block (Hiệu năng cao hơn thay đổi trực tiếp Material)
-        // Lưu ý: Tên property thường là "_BaseColor" (URP) hoặc "_Color" (Built-in)
-        _propBlock.SetColor("_BaseColor", color); 
-        _renderer.SetPropertyBlock(_propBlock);
+        #region Initialization
+
+        /// <summary>
+        /// Initializes renderer and material property block.
+        /// </summary>
+        private void InitializeComponents()
+        {
+            _renderer = GetComponent<Renderer>();
+            _propertyBlock = new MaterialPropertyBlock();
+
+            if (_renderer == null)
+            {
+                Debug.LogError($"[{nameof(FadingObject)}] Renderer component not found on {gameObject.name}!");
+            }
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        /// <summary>
+        /// Marks this object as currently obstructing the camera view.
+        /// Must be called every frame by the obstruction detection system.
+        /// </summary>
+        public void SetObstructing()
+        {
+            _isObstructing = true;
+        }
+
+        /// <summary>
+        /// Sets a custom target alpha value for this object.
+        /// </summary>
+        /// <param name="alpha">Target alpha value (0-1).</param>
+        public void SetTargetAlpha(float alpha)
+        {
+            targetAlpha = Mathf.Clamp01(alpha);
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        /// <summary>
+        /// Updates the fade state based on obstruction status.
+        /// </summary>
+        private void UpdateFadeState()
+        {
+            float targetValue = _isObstructing ? targetAlpha : FULLY_OPAQUE;
+            
+            if (Mathf.Abs(_currentAlpha - targetValue) > ALPHA_COMPARISON_THRESHOLD)
+            {
+                _currentAlpha = Mathf.MoveTowards(_currentAlpha, targetValue, fadeSpeed * Time.deltaTime);
+                ApplyAlpha(_currentAlpha);
+            }
+
+            // Reset obstruction flag - must be set again next frame by detection system
+            _isObstructing = false;
+        }
+
+        /// <summary>
+        /// Applies the alpha value to the material using MaterialPropertyBlock.
+        /// This is more performant than modifying material instances directly.
+        /// </summary>
+        /// <param name="alpha">Alpha value to apply (0-1).</param>
+        private void ApplyAlpha(float alpha)
+        {
+            if (_renderer == null) return;
+
+            _renderer.GetPropertyBlock(_propertyBlock);
+            
+            Color materialColor = _renderer.sharedMaterial.color;
+            materialColor.a = alpha;
+            
+            // Use URP's base color property (or _Color for Built-in)
+            _propertyBlock.SetColor(URP_BASE_COLOR_PROPERTY, materialColor);
+            _renderer.SetPropertyBlock(_propertyBlock);
+        }
+
+        #endregion
     }
 }
