@@ -1,108 +1,210 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-public class CameraObstructionDetector : MonoBehaviour
+namespace MagicFarm.Camera
 {
-    [Header("Target Settings")]
-    public Transform targetPlayer;
-    public LayerMask obstacleLayer;
-
-    [Header("Ray Settings")]
-    public float checkRadius = 0.2f;
-    public float boundExpand = 0.1f;
-
-    private Collider _playerCollider;
-    private Camera _cam; // Cần lấy Component Camera
-    
-    // Cache để tối ưu
-    private HashSet<FadingObject> _objectsToFade = new HashSet<FadingObject>();
-
-    void Start()
+    /// <summary>
+    /// Detects objects obstructing the camera's view of the target player and applies fading effects.
+    /// Works with isometric camera setups by casting rays from camera to player bounds.
+    /// </summary>
+    [RequireComponent(typeof(UnityEngine.Camera))]
+    public class CameraObstructionDetector : MonoBehaviour
     {
-        _cam = GetComponent<Camera>(); // Lấy Camera hiện tại
-        if (targetPlayer != null)
-            _playerCollider = targetPlayer.GetComponent<Collider>();
-    }
+        #region Serialized Fields
+        
+        [Header("Target Settings")]
+        [Tooltip("The player transform to track and protect from obstruction.")]
+        [SerializeField] private Transform targetPlayer;
+        
+        [Tooltip("Layer mask defining which objects can obstruct the view.")]
+        [SerializeField] private LayerMask obstacleLayer;
 
-    void LateUpdate()
-    {
-        if (targetPlayer == null || _playerCollider == null || _cam == null) return;
+        [Header("Detection Settings")]
+        [Tooltip("Radius of the sphere cast used for obstruction detection.")]
+        [SerializeField] private float checkRadius = 0.2f;
+        
+        [Tooltip("Additional bounds expansion around the player for more accurate detection.")]
+        [SerializeField] private float boundExpand = 0.1f;
 
-        // 1. Lấy 9 điểm bao quanh Player
-        Bounds bounds = _playerCollider.bounds;
-        bounds.Expand(boundExpand);
-        List<Vector3> checkPoints = GetNinePoints(bounds);
+        #endregion
 
-        _objectsToFade.Clear();
+        #region Private Fields
 
-        foreach (Vector3 point in checkPoints)
+        private Collider _playerCollider;
+        private UnityEngine.Camera _camera;
+        private readonly HashSet<FadingObject> _objectsToFade = new HashSet<FadingObject>();
+
+        #endregion
+
+        #region Unity Lifecycle
+
+        private void Start()
         {
-            // --- THAY ĐỔI QUAN TRỌNG Ở ĐÂY ---
-            
-            // Thay vì tự tính direction, ta đổi điểm World -> Screen -> Ray
-            // Điều này đảm bảo tia bắn ra LUÔN LUÔN song song với hướng nhìn của Isometric Camera
-            Vector3 screenPoint = _cam.WorldToScreenPoint(point);
-            Ray ray = _cam.ScreenPointToRay(screenPoint);
+            InitializeComponents();
+        }
 
-            // Tính khoảng cách từ mặt kính Camera đến Player
+        private void LateUpdate()
+        {
+            DetectAndHandleObstructions();
+        }
+
+        private void OnDrawGizmos()
+        {
+            DrawDebugRays();
+        }
+
+        #endregion
+
+        #region Initialization
+
+        /// <summary>
+        /// Initializes required components and validates setup.
+        /// </summary>
+        private void InitializeComponents()
+        {
+            _camera = GetComponent<UnityEngine.Camera>();
+            
+            if (targetPlayer != null)
+            {
+                _playerCollider = targetPlayer.GetComponent<Collider>();
+            }
+            
+            if (_camera == null)
+            {
+                Debug.LogError($"[{nameof(CameraObstructionDetector)}] Camera component is required but not found!");
+            }
+            
+            if (_playerCollider == null)
+            {
+                Debug.LogWarning($"[{nameof(CameraObstructionDetector)}] Target player or player collider not found!");
+            }
+        }
+
+        #endregion
+
+        #region Obstruction Detection
+
+        /// <summary>
+        /// Detects obstructions between camera and player, then applies fading to obstructing objects.
+        /// </summary>
+        private void DetectAndHandleObstructions()
+        {
+            if (!ValidateSetup()) return;
+
+            Bounds expandedBounds = GetExpandedPlayerBounds();
+            List<Vector3> checkPoints = GenerateBoundCheckPoints(expandedBounds);
+
+            _objectsToFade.Clear();
+
+            foreach (Vector3 point in checkPoints)
+            {
+                DetectObstructionsAtPoint(point);
+            }
+
+            ApplyFadingToObstructions();
+        }
+
+        /// <summary>
+        /// Validates that all required components are available.
+        /// </summary>
+        private bool ValidateSetup()
+        {
+            return targetPlayer != null && _playerCollider != null && _camera != null;
+        }
+
+        /// <summary>
+        /// Gets the player's bounds with expansion applied.
+        /// </summary>
+        private Bounds GetExpandedPlayerBounds()
+        {
+            Bounds bounds = _playerCollider.bounds;
+            bounds.Expand(boundExpand);
+            return bounds;
+        }
+
+        /// <summary>
+        /// Detects obstructions at a specific point using sphere cast.
+        /// </summary>
+        private void DetectObstructionsAtPoint(Vector3 point)
+        {
+            Vector3 screenPoint = _camera.WorldToScreenPoint(point);
+            Ray ray = _camera.ScreenPointToRay(screenPoint);
             float distance = Vector3.Distance(ray.origin, point);
 
-            // Bắn SphereCast theo tia Ray chuẩn của Camera
             RaycastHit[] hits = Physics.SphereCastAll(ray, checkRadius, distance, obstacleLayer);
 
             foreach (RaycastHit hit in hits)
             {
-                FadingObject fadingObj = hit.collider.GetComponent<FadingObject>();
-                if (fadingObj != null)
+                FadingObject fadingObject = hit.collider.GetComponent<FadingObject>();
+                if (fadingObject != null)
                 {
-                    _objectsToFade.Add(fadingObj);
+                    _objectsToFade.Add(fadingObject);
                 }
             }
         }
 
-        // Xử lý làm mờ
-        foreach (var obj in _objectsToFade)
+        /// <summary>
+        /// Applies fading effect to all detected obstructing objects.
+        /// </summary>
+        private void ApplyFadingToObstructions()
         {
-            obj.SetObstructing();
+            foreach (FadingObject fadingObject in _objectsToFade)
+            {
+                fadingObject.SetObstructing();
+            }
         }
-    }
 
-    // Giữ nguyên hàm lấy 9 điểm cũ
-    List<Vector3> GetNinePoints(Bounds b)
-    {
-        Vector3 min = b.min;
-        Vector3 max = b.max;
-        Vector3 center = b.center;
+        #endregion
 
-        return new List<Vector3>
+        #region Bounds Calculation
+
+        /// <summary>
+        /// Generates nine check points covering the bounds of the target.
+        /// Includes center, corners, and edge midpoints for comprehensive coverage.
+        /// </summary>
+        private List<Vector3> GenerateBoundCheckPoints(Bounds bounds)
         {
-            center, min, max,
-            new Vector3(min.x, min.y, max.z),
-            new Vector3(min.x, max.y, min.z),
-            new Vector3(max.x, min.y, min.z),
-            new Vector3(min.x, max.y, max.z),
-            new Vector3(max.x, min.y, max.z),
-            new Vector3(max.x, max.y, min.z)
-        };
-    }
-    
-    // Debug vẽ tia mới để kiểm tra
-    void OnDrawGizmos()
-    {
-        if (_playerCollider == null || GetComponent<Camera>() == null) return;
-        
-        Gizmos.color = Color.cyan;
-        Bounds b = _playerCollider.bounds;
-        b.Expand(boundExpand);
-        List<Vector3> points = GetNinePoints(b);
-        Camera cam = GetComponent<Camera>();
+            Vector3 min = bounds.min;
+            Vector3 max = bounds.max;
+            Vector3 center = bounds.center;
 
-        foreach (var p in points)
-        {
-             // Vẽ giả lập tia ray camera bắn xuống
-             Vector3 screenP = cam.WorldToScreenPoint(p);
-             Ray r = cam.ScreenPointToRay(screenP);
-             Gizmos.DrawLine(r.origin, p);
+            return new List<Vector3>
+            {
+                center,
+                min,
+                max,
+                new Vector3(min.x, min.y, max.z),
+                new Vector3(min.x, max.y, min.z),
+                new Vector3(max.x, min.y, min.z),
+                new Vector3(min.x, max.y, max.z),
+                new Vector3(max.x, min.y, max.z),
+                new Vector3(max.x, max.y, min.z)
+            };
         }
+
+        #endregion
+
+        #region Debug Visualization
+
+        /// <summary>
+        /// Draws debug rays in the scene view for visualization.
+        /// </summary>
+        private void DrawDebugRays()
+        {
+            if (_playerCollider == null || _camera == null) return;
+
+            Gizmos.color = Color.cyan;
+            Bounds expandedBounds = GetExpandedPlayerBounds();
+            List<Vector3> points = GenerateBoundCheckPoints(expandedBounds);
+
+            foreach (Vector3 point in points)
+            {
+                Vector3 screenPoint = _camera.WorldToScreenPoint(point);
+                Ray ray = _camera.ScreenPointToRay(screenPoint);
+                Gizmos.DrawLine(ray.origin, point);
+            }
+        }
+
+        #endregion
     }
 }
